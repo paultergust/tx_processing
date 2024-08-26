@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::account::Account;
 
@@ -8,11 +8,13 @@ pub struct Transaction {
     tx_type: TxType,
     client: u32,
     tx: u32,
+    #[serde(deserialize_with="deserialize_amount")]
     amount: f32,
+    #[serde(default="default_bool", deserialize_with="deserialize_dispute")]
     under_dispute: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize)]
 enum TxType {
     Deposit,
     Withdrawal,
@@ -63,4 +65,44 @@ impl Transaction {
         acc.locked = true;
         self.under_dispute = false;
     }
+}
+
+impl<'de> Deserialize<'de> for TxType {
+    fn deserialize<D>(de: D) -> Result<Self, D::Error>
+    where
+        D:Deserializer<'de> {
+            let variant = String::deserialize(de)?;
+            Ok(match variant.as_str() {
+                "deposit" => TxType::Deposit,
+                "withdrawal" => TxType::Withdrawal,
+                "dispute" => TxType::Dispute,
+                "resolve" => TxType::Resolve,
+                "chargeback" => TxType::Chargeback,
+                _ => TxType::Unknown,
+            })
+    }
+}
+
+fn deserialize_amount<'de, D>(deserializer: D) -> Result<f32, D::Error> 
+where D:serde::Deserializer<'de>
+{
+    let s: Option<String> = Option::deserialize(deserializer)?;
+    match s {
+        Some(s) => s.parse::<f32>().map_err(serde::de::Error::custom),
+        None => Ok(0f32),
+    }
+}
+
+fn deserialize_dispute<'de, D>(deserializer: D) -> Result<bool, D::Error> 
+where D:serde::Deserializer<'de>
+{
+    let s: Option<String> = Option::deserialize(deserializer)?;
+    match s {
+        Some(b) => b.parse::<bool>().map_err(serde::de::Error::custom),
+        None => Ok(false),
+    }
+}
+
+fn default_bool() -> bool {
+    false
 }
