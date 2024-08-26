@@ -3,7 +3,7 @@ use serde::{Serialize, Deserialize};
 use crate::account::Account;
 
 #[derive(Debug, Serialize, Deserialize)]
-struct Transaction {
+pub struct Transaction {
     #[serde(rename="type")]
     tx_type: TxType,
     client: u32,
