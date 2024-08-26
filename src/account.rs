@@ -10,6 +10,7 @@ pub struct Account {
 }
 
 impl Account {
+    pub const DB_NAME: &'static str = "account_db";
     pub fn new(id: u32) -> Account {
         Account {
             id,
