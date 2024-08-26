@@ -5,17 +5,17 @@ use crate::account::Account;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Transaction {
     #[serde(rename="type")]
-    tx_type: TxType,
-    client: u32,
-    tx: u32,
+    pub tx_type: TxType,
+    pub client: u32,
+    pub tx: u32,
     #[serde(deserialize_with="deserialize_amount")]
-    amount: f32,
+    pub amount: f32,
     #[serde(default="default_bool", deserialize_with="deserialize_dispute")]
     under_dispute: bool,
 }
 
-#[derive(Debug, Serialize)]
-enum TxType {
+#[derive(Clone, Debug, Serialize)]
+pub enum TxType {
     Deposit,
     Withdrawal,
     Dispute,
@@ -25,15 +25,7 @@ enum TxType {
 }
 
 impl Transaction {
-    pub fn new() -> Transaction {
-        Transaction {
-            tx_type: TxType::Unknown,
-            client: 0,
-            tx: 0,
-            amount: 0.0,
-            under_dispute: false,
-        }
-    }
+    pub const DB_NAME: &'static str = "transation_db";
     pub fn deposit(&self, acc: &mut Account) {
         acc.total += self.amount;
         acc.available += self.amount;
