@@ -1,12 +1,15 @@
 use serde::{Serialize, Deserialize};
 
+use crate::account::Account;
+
 #[derive(Debug, Serialize, Deserialize)]
 struct Transaction {
     #[serde(rename="type")]
-    pub tx_type: TxType,
-    pub client: u32,
-    pub tx: u32,
-    pub amount: f32,
+    tx_type: TxType,
+    client: u32,
+    tx: u32,
+    amount: f32,
+    under_dispute: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -16,27 +19,48 @@ enum TxType {
     Dispute,
     Resolve,
     Chargeback,
+    Unknown,
 }
 
 impl Transaction {
-    pub fn deposit() {
-        todo!("Implement deposit");
+    pub fn new() -> Transaction {
+        Transaction {
+            tx_type: TxType::Unknown,
+            client: 0,
+            tx: 0,
+            amount: 0.0,
+            under_dispute: false,
+        }
+    }
+    pub fn deposit(&self, acc: &mut Account) {
+        acc.total += self.amount;
+        acc.available += self.amount;
     }
 
-    pub fn withdrawal() {
-        todo!("Implement deposit");
+    pub fn withdrawal(&self, acc: &mut Account) {
+        if self.amount > acc.available {
+            return;
+        }
+        acc.available -= self.amount;
+        acc.total -= self.amount;
     }
 
-    pub fn dispute() {
-        todo!("Implement deposit");
+    pub fn dispute(&mut self, acc: &mut Account) {
+        acc.available -= self.amount;
+        acc.held += self.amount;
+        self.under_dispute = true;
     }
 
-    pub fn resolve() {
-        todo!("Implement deposit");
+    pub fn resolve(&mut self, acc: &mut Account) {
+        acc.available += self.amount;
+        acc.held -= self.amount;
+        self.under_dispute = false;
     }
 
-    pub fn chargeback() {
-        todo!("Implement deposit");
+    pub fn chargeback(&mut self, acc: &mut Account) {
+        acc.total -= self.amount;
+        acc.held -= self.amount;
+        acc.locked = true;
+        self.under_dispute = false;
     }
-
 }

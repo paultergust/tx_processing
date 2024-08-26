@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
-struct Account {
-    id: u32,
-    available: f32,
-    held: f32,
-    total: f32,
-    locked: bool,
+pub struct Account {
+    pub id: u32,
+    pub available: f32,
+    pub held: f32,
+    pub total: f32,
+    pub locked: bool,
 }
 
 impl Account {
