@@ -26,15 +26,7 @@ pub enum TxType {
 
 impl Transaction {
     pub const DB_NAME: &'static str = "transation_db";
-    pub fn new() -> Transaction {
-        Transaction {
-            tx_type: TxType::Unknown,
-            client: 0,
-            tx: 0,
-            amount: 0.0,
-            under_dispute: false,
-        }
-    }
+
     pub fn deposit(&self, acc: &mut Account) {
         acc.total += self.amount;
         acc.available += self.amount;
@@ -87,9 +79,9 @@ impl<'de> Deserialize<'de> for TxType {
 fn deserialize_amount<'de, D>(deserializer: D) -> Result<f32, D::Error> 
 where D:serde::Deserializer<'de>
 {
-    let s: Option<String> = Option::deserialize(deserializer)?;
+    let s: Option<f32> = Option::deserialize(deserializer)?;
     match s {
-        Some(s) => s.parse::<f32>().map_err(serde::de::Error::custom),
+        Some(s) => Ok(s),
         None => Ok(0f32),
     }
 }
@@ -97,9 +89,9 @@ where D:serde::Deserializer<'de>
 fn deserialize_dispute<'de, D>(deserializer: D) -> Result<bool, D::Error> 
 where D:serde::Deserializer<'de>
 {
-    let s: Option<String> = Option::deserialize(deserializer)?;
+    let s: Option<bool> = Option::deserialize(deserializer)?;
     match s {
-        Some(b) => b.parse::<bool>().map_err(serde::de::Error::custom),
+        Some(b) => Ok(b),
         None => Ok(false),
     }
 }

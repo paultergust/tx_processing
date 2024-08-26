@@ -8,7 +8,7 @@ use std::{fs::File, io::BufReader};
 use clap::Parser;
 use csv::{ReaderBuilder, Trim, Writer};
 use sled::Db;
-use bincode::{serialize, deserialize};
+use serde_json::{from_slice, to_string};
 use transaction::TxType;
 
 use crate::transaction::Transaction;
@@ -77,12 +77,11 @@ fn process_transactions(filename: String) -> Result<(), Box<dyn Error>> {
 }
 
 fn insert_account(db: &Db, account: &Account) -> Result<(), Box<dyn Error>> {
-    let serialized_data = serialize(account)?;
+    let serialized_data = to_string(account)?;
     
-    db.insert(account.id.to_be_bytes(), serialized_data)?;
+    db.insert(account.id.to_be_bytes(), serialized_data.as_bytes())?;
     
     db.flush()?;
-    
     Ok(())
 }
 
@@ -90,7 +89,7 @@ fn get_account(db: &Db, key: u32) -> Result<Option<Account>, Box<dyn Error>> {
 
     if let Some(serialized_data) = db.get(key.to_be_bytes())? {
 
-        let account: Account = deserialize(&serialized_data)?;
+        let account: Account = from_slice(&serialized_data)?;
         Ok(Some(account))
     } else {
         Ok(None)
@@ -98,9 +97,8 @@ fn get_account(db: &Db, key: u32) -> Result<Option<Account>, Box<dyn Error>> {
 }
 
 fn insert_transaction(db: &Db, tx: &Transaction) -> Result<(), Box<dyn Error>> {
-    let serialized_data = serialize(tx)?;
-    
-    db.insert(tx.tx.to_be_bytes(), serialized_data)?;
+    let serialized_data = to_string(tx)?;
+    db.insert(tx.tx.to_be_bytes(), serialized_data.as_bytes())?;
     
     db.flush()?;
     
@@ -108,20 +106,13 @@ fn insert_transaction(db: &Db, tx: &Transaction) -> Result<(), Box<dyn Error>> {
 }
 
 fn get_transaction(db: &Db, key: u32) -> Result<Option<Transaction>, Box<dyn Error>> {
-    let v = match db.get(key.to_be_bytes()) {
-        Ok(n) => {
-            match n {
-                Some(v) => v,
-                None => panic!("none found"),
-            }
-        },
-        Err(e) => panic!("sled error here {:?}", e),
-    };
-    let tx:Transaction = match deserialize(&v) {
-        Ok(t) => t,
-        Err(e) => panic!("Error deserializing: {:?}", e),
-    };
-    Ok(Some(tx))
+    if let Some(serialized_data) = db.get(key.to_be_bytes())? {
+
+        let tx: Transaction = from_slice(&serialized_data)?;
+        Ok(Some(tx))
+    } else {
+        Ok(None)
+    }
 }
 
 fn output_db_as_csv(db: &Db) -> Result<(), Box<dyn Error>> {
@@ -132,7 +123,7 @@ fn output_db_as_csv(db: &Db) -> Result<(), Box<dyn Error>> {
     for result in db.iter() {
         let (_, value) = result?;
 
-        let account: Account = deserialize(&value)?;
+        let account: Account = from_slice(&value)?;
         let fmt_av = format!("{:.4}", account.available);
         let fmt_hd = format!("{:.4}", account.held);
         let fmt_tt = format!("{:.4}", account.total);
