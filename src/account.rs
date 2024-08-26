@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Account {
-    pub id: u32,
+    pub id: u16,
     pub available: f32,
     pub held: f32,
     pub total: f32,
@@ -11,7 +11,7 @@ pub struct Account {
 
 impl Account {
     pub const DB_NAME: &'static str = "account_db";
-    pub fn new(id: u32) -> Account {
+    pub fn new(id: u16) -> Account {
         Account {
             id,
             available: 0f32,

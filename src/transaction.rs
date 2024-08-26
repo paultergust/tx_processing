@@ -6,7 +6,7 @@ use crate::account::Account;
 pub struct Transaction {
     #[serde(rename="type")]
     pub tx_type: TxType,
-    pub client: u32,
+    pub client: u16,
     pub tx: u32,
     #[serde(deserialize_with="deserialize_amount")]
     pub amount: f32,

@@ -85,7 +85,7 @@ fn insert_account(db: &Db, account: &Account) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn get_account(db: &Db, key: u32) -> Result<Option<Account>, Box<dyn Error>> {
+fn get_account(db: &Db, key: u16) -> Result<Option<Account>, Box<dyn Error>> {
 
     if let Some(serialized_data) = db.get(key.to_be_bytes())? {
 
