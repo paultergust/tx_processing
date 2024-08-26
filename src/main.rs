@@ -2,10 +2,11 @@ mod transaction;
 mod account;
 
 use std::error::Error;
+use std::fs::remove_dir_all;
 use std::{fs::File, io::BufReader};
 
 use clap::Parser;
-use csv::{ReaderBuilder, Trim};
+use csv::{ReaderBuilder, Trim, Writer};
 use sled::Db;
 use bincode::{serialize, deserialize};
 use transaction::TxType;
@@ -27,7 +28,7 @@ fn main() {
     };
 }
 
-fn process_transactions(filename: String) -> Result<(), Box<dyn Error>>{
+fn process_transactions(filename: String) -> Result<(), Box<dyn Error>> {
     let tx_db = sled::open(Transaction::DB_NAME)?;
     let ac_db = sled::open(Account::DB_NAME)?;
     let file = match File::open(filename) {
@@ -40,7 +41,7 @@ fn process_transactions(filename: String) -> Result<(), Box<dyn Error>>{
         .has_headers(true)
         .from_reader(filereader);
     for result in csv_reader.deserialize::<Transaction>() {
-        let mut tx: Transaction = result?;
+        let tx: Transaction = result?;
         let mut acc: Account = match get_account(&ac_db, tx.client) {
             Ok(a) => match a {
                 Some(v) => v,
@@ -52,16 +53,16 @@ fn process_transactions(filename: String) -> Result<(), Box<dyn Error>>{
             TxType::Deposit => tx.deposit(&mut acc),
             TxType::Withdrawal => tx.withdrawal(&mut acc),
             TxType::Dispute | TxType::Resolve | TxType::Chargeback => {
-                let old_type = tx.tx_type.clone();
-                tx = match get_transaction(&tx_db, tx.tx) {
-                    Ok(Some(v)) => v,
-                    _=> continue,
-                };
-                match old_type {
-                    TxType::Resolve => tx.resolve(&mut acc),
-                    TxType::Dispute => tx.dispute(&mut acc),
-                    TxType::Chargeback => tx.chargeback(&mut acc),
-                    _ => unreachable!(),
+                match get_transaction(&tx_db, tx.tx) {
+                    Ok(Some(mut updated_tx)) => {
+                        match tx.tx_type {
+                            TxType::Dispute => updated_tx.dispute(&mut acc),
+                            TxType::Resolve => updated_tx.resolve(&mut acc),
+                            TxType::Chargeback => updated_tx.chargeback(&mut acc),
+                            _ => unreachable!(),
+                        }
+                    },
+                    _ => continue,
                 }
             },
             TxType::Unknown => continue,
@@ -69,6 +70,9 @@ fn process_transactions(filename: String) -> Result<(), Box<dyn Error>>{
         insert_account(&ac_db, &acc)?;
         insert_transaction(&tx_db, &tx)?;
     }
+    let _ = output_db_as_csv(&ac_db);
+    let _ = remove_dir_all(Account::DB_NAME);
+    let _ = remove_dir_all(Transaction::DB_NAME);
     Ok(())
 }
 
@@ -104,12 +108,38 @@ fn insert_transaction(db: &Db, tx: &Transaction) -> Result<(), Box<dyn Error>> {
 }
 
 fn get_transaction(db: &Db, key: u32) -> Result<Option<Transaction>, Box<dyn Error>> {
+    let v = match db.get(key.to_be_bytes()) {
+        Ok(n) => {
+            match n {
+                Some(v) => v,
+                None => panic!("none found"),
+            }
+        },
+        Err(e) => panic!("sled error here {:?}", e),
+    };
+    let tx:Transaction = match deserialize(&v) {
+        Ok(t) => t,
+        Err(e) => panic!("Error deserializing: {:?}", e),
+    };
+    Ok(Some(tx))
+}
 
-    if let Some(serialized_data) = db.get(key.to_be_bytes())? {
+fn output_db_as_csv(db: &Db) -> Result<(), Box<dyn Error>> {
+    let mut wtr = Writer::from_writer(std::io::stdout());
 
-        let tx: Transaction = deserialize(&serialized_data)?;
-        Ok(Some(tx))
-    } else {
-        Ok(None)
+    wtr.write_record(&["client", "available", "held", "total", "locked"])?;
+
+    for result in db.iter() {
+        let (_, value) = result?;
+
+        let account: Account = deserialize(&value)?;
+        let fmt_av = format!("{:.4}", account.available);
+        let fmt_hd = format!("{:.4}", account.held);
+        let fmt_tt = format!("{:.4}", account.total);
+
+        wtr.serialize((account.id, fmt_av, fmt_hd, fmt_tt, account.locked))?;
     }
+
+    wtr.flush()?;
+    Ok(())
 }

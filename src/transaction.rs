@@ -26,6 +26,15 @@ pub enum TxType {
 
 impl Transaction {
     pub const DB_NAME: &'static str = "transation_db";
+    pub fn new() -> Transaction {
+        Transaction {
+            tx_type: TxType::Unknown,
+            client: 0,
+            tx: 0,
+            amount: 0.0,
+            under_dispute: false,
+        }
+    }
     pub fn deposit(&self, acc: &mut Account) {
         acc.total += self.amount;
         acc.available += self.amount;
