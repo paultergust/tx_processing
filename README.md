@@ -1,30 +1,51 @@
 # Transaction Processing
 
-This application, written in Rust, takes a CSV file containing transactions with fields Type, Client, Tx and Amount and executes the transactions on the respective Accounts (Clients). The output is a CSV-formatted string with the Accounts after all transactions are processed.
+This Rust application processes a CSV file containing financial transactions, applies them to corresponding accounts and outputs the updated account states as a CSV-formatted string.
 
-Transactions have 5 variant types: Deposit, Withdrawal, Dispute, Resolve and Chargeback. Each with its own behavior and rule. This software handles all of them.
+## Table of Contents
 
-## A few decisions
+- [Overview](#overview)
+- [Crate Selection](#crate-selection)
+- [Design Decisions](#design-decisions)
+- [Running the project](#running-the-project)
 
-One of the first decisions made regarding this project was what crates to use. I have decided to go with 
+## Overview
 
-* [clap](https://crates.io/crates/clap) for CLI parsing,
-* [csv](https://crates.io/crates/csv) to process CSV input and output,
-* [serde](https://crates.io/crates/serde) as base for Serialization/Deserialization,
-* [serde_json](https://crates.io/crates/serde_json) to serialize to and from json as a intermediate format,
-* [sled](https://crates.io/crates/sled) as a key-value DB in which to put records during execution.
+This application executes various types of financial transactions (Deposit, Withdrawal, Dispute, Resolve, and Chargeback) on client accounts, adhering to specific rules for each transaction type. The result is a summary of all accounts after processing.
 
-Considering the resource management for this project, holding all the Transactions and Accounts in memory during execution is simply not feasible. So an embedded K/V database was used for both record types.
-So during runtime, for each Transaction, an Account is either fetched or created, and then the transaction is processed. If the Transaction is not applicable (due to the type or other factor), it is skipped.
-The input file is read via a Buffer Reader, in order to not load it entirely in memory at once. And this way it could also handle input from other sources (a TCP stream, for example).
+## Crate Selection
 
-Tests are not implemented (neither Unit Tests nor Integration Tests). But basic correctness is ensured by the type system. Errors are handled with pattern-matching in a few cases, and propagated in others. This approach was chosen in part to exemplify different ways to handle errors and variable cases.
+The following crates were selected to build this project:
 
-Comments are reduced to places where it is important to document the reason behind a certain decision, instead of the details of implementation or functionality.
+- **[clap](https://crates.io/crates/clap)**: Used for command-line interface (CLI) parsing to easily handle user inputs.
+- **[csv](https://crates.io/crates/csv)**: Provides utilities for reading and writing CSV files, which is the format for both input and output data.
+- **[serde](https://crates.io/crates/serde)**: A framework for serializing and deserializing Rust data structures.
+- **[serde_json](https://crates.io/crates/serde_json)**: Facilitates the serialization to and from JSON as an intermediate format for storage in the key-value database.
+- **[sled](https://crates.io/crates/sled)**: A high-performance embedded key-value store used to manage the accounts and transactions on disk.
 
-## Testing
+## Design Decisions
 
-Since unit tests are not implemented, I needed a csv file to use as input. I used Python's `random` module to create a CSV file with a number of with fake transactions. You can find it in `data.csv`
+### Resource Management
+
+To avoid holding all transactions and accounts in memory, which is not feasible for large datasets, the application uses **sled** as an embedded key-value database to store accounts and transactions. Each transaction fetches or creates the associated account, processes the transaction, and updates the account state in the database.
+
+### Input Handling
+
+The input CSV file is processed using a `BufReader` to prevent loading the entire file into memory, which also allows the application to handle streaming data from various sources, such as TCP streams.
+
+### Error Handling
+
+Error handling is implemented through a combination of pattern matching and error propagation. The application demonstrates different strategies for handling errors in Rust:
+- Pattern matching is used where immediate action is required.
+- Error propagation (`?` operator) is used to defer error handling to the caller.
+
+### Unit Tests
+
+There are no unit tests in this version of the project. Basic correctness is ensured by Rust's type system and error handling.
+
+### Manual Tests
+
+I used Python's `random` module to create a CSV file with a number of fake transactions. You can find it in `data.csv`
 
 ## Running the project
 
@@ -34,10 +55,10 @@ Having [Rust installed](https://www.rust-lang.org/tools/install), just run:
 cargo run -- data.csv
 ```
 
-the output is set to `stdout` by default. To change it to a file, you can redirect it in the CLI:
+The output is set to `stdout` by default. To change it to a file, you can redirect it in the CLI:
 
 ```shell
 cargo run -- data.csv > output.csv
-``` 
+```
 
 If any questions come up, feel free to reach out to me.
