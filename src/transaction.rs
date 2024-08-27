@@ -121,3 +121,264 @@ where
 fn default_bool() -> bool {
     false
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::account::Account; // Assuming Account is defined in crate::account
+
+    #[test]
+    fn test_deposit() {
+        let mut account = Account {
+            id: 1,
+            total: 0.0,
+            available: 0.0,
+            held: 0.0,
+            locked: false,
+        };
+        let transaction = Transaction {
+            tx_type: TxType::Deposit,
+            client: 1,
+            tx: "1".to_string(),
+            amount: 100.0,
+            under_dispute: false,
+        };
+
+        transaction.deposit(&mut account);
+        assert_eq!(account.total, 100.0);
+        assert_eq!(account.available, 100.0);
+    }
+
+    #[test]
+    fn test_withdrawal() {
+        let mut account = Account {
+            id: 1,
+            total: 100.0,
+            available: 100.0,
+            held: 0.0,
+            locked: false,
+        };
+        let transaction = Transaction {
+            tx_type: TxType::Withdrawal,
+            client: 1,
+            tx: "2".to_string(),
+            amount: 50.0,
+            under_dispute: false,
+        };
+
+        transaction.withdrawal(&mut account);
+        assert_eq!(account.total, 50.0);
+        assert_eq!(account.available, 50.0);
+    }
+
+    #[test]
+    fn test_withdrawal_insufficient_funds() {
+        let mut account = Account {
+            id: 1,
+            total: 50.0,
+            available: 50.0,
+            held: 0.0,
+            locked: false,
+        };
+        let transaction = Transaction {
+            tx_type: TxType::Withdrawal,
+            client: 1,
+            tx: "3".to_string(),
+            amount: 100.0,
+            under_dispute: false,
+        };
+
+        transaction.withdrawal(&mut account);
+        assert_eq!(account.total, 50.0); // No change
+        assert_eq!(account.available, 50.0); // No change
+    }
+
+    #[test]
+    fn test_dispute() {
+        let mut account = Account {
+            id: 1,
+            total: 100.0,
+            available: 100.0,
+            held: 0.0,
+            locked: false,
+        };
+        let mut transaction = Transaction {
+            tx_type: TxType::Dispute,
+            client: 1,
+            tx: "4".to_string(),
+            amount: 50.0,
+            under_dispute: false,
+        };
+
+        transaction.dispute(&mut account);
+        assert_eq!(account.available, 50.0);
+        assert_eq!(account.held, 50.0);
+        assert!(transaction.under_dispute);
+    }
+
+    #[test]
+    fn test_resolve() {
+        let mut account = Account {
+            id: 1,
+            total: 100.0,
+            available: 50.0,
+            held: 50.0,
+            locked: false,
+        };
+        let mut transaction = Transaction {
+            tx_type: TxType::Resolve,
+            client: 1,
+            tx: "5".to_string(),
+            amount: 50.0,
+            under_dispute: true,
+        };
+
+        transaction.resolve(&mut account);
+        assert_eq!(account.available, 100.0);
+        assert_eq!(account.held, 0.0);
+        assert!(!transaction.under_dispute);
+    }
+
+    #[test]
+    fn test_resolve_not_under_dispute() {
+        let mut account = Account {
+            id: 1,
+            total: 100.0,
+            available: 100.0,
+            held: 0.0,
+            locked: false,
+        };
+        let mut transaction = Transaction {
+            tx_type: TxType::Resolve,
+            client: 1,
+            tx: "6".to_string(),
+            amount: 50.0,
+            under_dispute: false,
+        };
+
+        transaction.resolve(&mut account);
+        assert_eq!(account.available, 100.0); // No change
+        assert_eq!(account.held, 0.0); // No change
+        assert!(!transaction.under_dispute);
+    }
+
+    #[test]
+    fn test_chargeback() {
+        let mut account = Account {
+            id: 1,
+            total: 100.0,
+            available: 50.0,
+            held: 50.0,
+            locked: false,
+        };
+        let mut transaction = Transaction {
+            tx_type: TxType::Chargeback,
+            client: 1,
+            tx: "7".to_string(),
+            amount: 50.0,
+            under_dispute: true,
+        };
+
+        transaction.chargeback(&mut account);
+        assert_eq!(account.total, 50.0);
+        assert_eq!(account.held, 0.0);
+        assert!(account.locked);
+        assert!(!transaction.under_dispute);
+    }
+
+    #[test]
+    fn test_chargeback_not_under_dispute() {
+        let mut account = Account {
+            id: 1,
+            total: 100.0,
+            available: 100.0,
+            held: 0.0,
+            locked: false,
+        };
+        let mut transaction = Transaction {
+            tx_type: TxType::Chargeback,
+            client: 1,
+            tx: "8".to_string(),
+            amount: 50.0,
+            under_dispute: false,
+        };
+
+        transaction.chargeback(&mut account);
+        assert_eq!(account.total, 100.0); // No change
+        assert_eq!(account.held, 0.0); // No change
+        assert!(!account.locked);
+        assert!(!transaction.under_dispute);
+    }
+
+    #[test]
+    fn test_deserialize_amount() {
+        use serde_json::json;
+
+        let json_data = json!({
+            "type": "deposit",
+            "client": 1,
+            "tx": "9",
+            "amount": -100.0
+        });
+
+        let transaction: Transaction = serde_json::from_value(json_data).unwrap();
+        assert_eq!(transaction.amount, 100.0); // Absolute value
+    }
+
+    #[test]
+    fn test_deserialize_dispute() {
+        use serde_json::json;
+
+        let json_data = json!({
+            "type": "dispute",
+            "client": 1,
+            "tx": "10",
+            "amount": 100.0,
+            "under_dispute": "true"
+        });
+
+        let transaction: Transaction = serde_json::from_value(json_data).unwrap();
+        assert_eq!(transaction.under_dispute, true);
+    }
+
+    #[test]
+    fn test_bool_to_string() {
+        use serde_json::to_string;
+
+        let transaction = Transaction {
+            tx_type: TxType::Deposit,
+            client: 1,
+            tx: "11".to_string(),
+            amount: 100.0,
+            under_dispute: true,
+        };
+
+        let json = to_string(&transaction).unwrap();
+        assert!(json.contains("\"under_dispute\":\"true\""));
+    }
+
+    #[test]
+    fn test_tx_type_deserialize() {
+        use serde_json::from_str;
+
+        let json_data = "\"deposit\"";
+        let tx_type: TxType = from_str(json_data).unwrap();
+        assert_eq!(tx_type, TxType::Deposit);
+
+        let json_data = "\"withdrawal\"";
+        let tx_type: TxType = from_str(json_data).unwrap();
+        assert_eq!(tx_type, TxType::Withdrawal);
+
+        let json_data = "\"dispute\"";
+        let tx_type: TxType = from_str(json_data).unwrap();
+        assert_eq!(tx_type, TxType::Dispute);
+
+        let json_data = "\"resolve\"";
+        let tx_type: TxType = from_str(json_data).unwrap();
+        assert_eq!(tx_type, TxType::Resolve);
+
+        let json_data = "\"chargeback\"";
+        let tx_type: TxType = from_str(json_data).unwrap();
+        assert_eq!(tx_type, TxType::Chargeback);
+    }
+}
+

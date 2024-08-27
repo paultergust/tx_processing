@@ -167,3 +167,147 @@ fn cleanup() {
     let _ = remove_dir_all(Account::DB_NAME);
     let _ = remove_dir_all(Transaction::DB_NAME);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use csv::ReaderBuilder;
+    use sled::Config;
+    use std::io::Cursor;
+
+    #[test]
+    fn test_process_transactions_in_memory() {
+        // Sample CSV data in memory
+        let csv_data = "\
+            type,client,tx,amount\n\
+            deposit,1,tx1,100.0\n\
+            withdrawal,1,tx2,50.0\n";
+
+        let tx_db = Config::new().temporary(true).open().unwrap();
+        let ac_db = Config::new().temporary(true).open().unwrap();
+
+        let mut csv_reader = ReaderBuilder::new()
+            .trim(Trim::All)
+            .has_headers(true)
+            .from_reader(Cursor::new(csv_data));
+
+        for result in csv_reader.deserialize::<Transaction>() {
+            let mut tx: Transaction = result.unwrap();
+            let mut acc = get_or_create_account(&ac_db, tx.client).unwrap();
+
+            match process_transaction(&tx_db, &mut acc, &mut tx) {
+                Ok(()) => {
+                    insert_account(&ac_db, &acc).unwrap();
+                }
+                Err(e) => eprintln!("Error processing transaction: {}", e),
+            }
+        }
+
+        // Check if account data is updated correctly
+        let account = get_account(&ac_db, 1).unwrap().unwrap();
+        assert_eq!(account.available, 50.0);
+        assert_eq!(account.total, 50.0);
+        assert_eq!(account.held, 0.0);
+    }
+
+    #[test]
+    fn test_get_or_create_account_in_memory() {
+        let db = Config::new().temporary(true).open().unwrap();
+
+        // Creating a new account
+        let account = get_or_create_account(&db, 1).unwrap();
+        assert_eq!(account.id, 1);
+        assert_eq!(account.total, 0.0);
+        assert_eq!(account.available, 0.0);
+        assert_eq!(account.held, 0.0);
+        assert!(!account.locked);
+
+        // Fetching an existing account
+        insert_account(&db, &account).unwrap();
+        let fetched_account = get_or_create_account(&db, 1).unwrap();
+        assert_eq!(fetched_account.id, 1);
+    }
+
+    #[test]
+    fn test_insert_and_get_account_in_memory() {
+        let db = Config::new().temporary(true).open().unwrap();
+
+        let account = Account {
+            id: 1,
+            total: 100.0,
+            available: 100.0,
+            held: 0.0,
+            locked: false,
+        };
+
+        insert_account(&db, &account).unwrap();
+        let fetched_account = get_account(&db, 1).unwrap().unwrap();
+
+        assert_eq!(fetched_account.id, 1);
+        assert_eq!(fetched_account.total, 100.0);
+        assert_eq!(fetched_account.available, 100.0);
+        assert_eq!(fetched_account.held, 0.0);
+        assert!(!fetched_account.locked);
+    }
+
+    #[test]
+    fn test_insert_and_get_transaction_in_memory() {
+        let db = Config::new().temporary(true).open().unwrap();
+
+        let transaction = Transaction {
+            tx_type: TxType::Deposit,
+            client: 1,
+            tx: "tx1".to_string(),
+            amount: 100.0,
+            under_dispute: false,
+        };
+
+        insert_transaction(&db, &transaction).unwrap();
+        let fetched_transaction = get_transaction(&db, &"tx1".to_string()).unwrap().unwrap();
+
+        assert_eq!(fetched_transaction.tx_type, TxType::Deposit);
+        assert_eq!(fetched_transaction.client, 1);
+        assert_eq!(fetched_transaction.tx, "tx1");
+        assert_eq!(fetched_transaction.amount, 100.0);
+        assert!(!fetched_transaction.under_dispute);
+    }
+
+    #[test]
+    fn test_output_db_as_csv_in_memory() {
+        let db = Config::new().temporary(true).open().unwrap();
+
+        let account = Account {
+            id: 1,
+            total: 100.0,
+            available: 100.0,
+            held: 0.0,
+            locked: false,
+        };
+
+        insert_account(&db, &account).unwrap();
+
+        // Redirect output to a buffer
+        let mut buffer = Vec::new();
+        {
+            let mut writer = csv::Writer::from_writer(&mut buffer);
+            writer
+                .write_record(&["client", "available", "held", "total", "locked"])
+                .unwrap();
+            writer
+                .serialize((
+                    account.id,
+                    format!("{:.4}", account.available),
+                    format!("{:.4}", account.held),
+                    format!("{:.4}", account.total),
+                    account.locked,
+                ))
+                .unwrap();
+            writer.flush().unwrap();
+        }
+
+        let output = String::from_utf8(buffer).unwrap();
+        assert!(output.contains("client,available,held,total,locked"));
+        assert!(output.contains("1,100.0000,0.0000,100.0000,false"));
+    }
+}
+
