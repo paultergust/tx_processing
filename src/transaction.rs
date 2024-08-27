@@ -86,6 +86,7 @@ impl<'de> Deserialize<'de> for TxType {
     }
 }
 
+// when amount is missing (disputes, resolves, chargebacks), default value is set to 0.0
 fn deserialize_amount<'de, D>(deserializer: D) -> Result<f32, D::Error>
 where
     D: serde::Deserializer<'de>,
