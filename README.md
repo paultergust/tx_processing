@@ -41,7 +41,11 @@ Error handling is implemented through a combination of pattern matching and erro
 
 ### Unit Tests
 
-There are no unit tests in this version of the project. Basic correctness is ensured by Rust's type system and error handling.
+There are a few unit tests implemented. You can run them with:
+
+```shell
+cargo test
+```
 
 ### Manual Tests
 
