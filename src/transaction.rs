@@ -93,7 +93,8 @@ where
 {
     let s: Option<f32> = Option::deserialize(deserializer)?;
     match s {
-        Some(s) => Ok(s),
+        // set amount value to abs so it won't allow negative operations
+        Some(s) => Ok(s.abs()),
         None => Ok(0f32),
     }
 }
